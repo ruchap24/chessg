@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { Chessboard } from 'react-chessboard';
 import { Chess } from 'chess.js';
 

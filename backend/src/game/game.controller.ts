@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body } from '@nestjs/common';
 import { GameService } from './game.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User } from '../user/entities/user.entity';
@@ -6,6 +6,11 @@ import { User } from '../user/entities/user.entity';
 @Controller('game')
 export class GameController {
   constructor(private gameService: GameService) {}
+
+  @Get('active')
+  async getActiveGame(@CurrentUser() user: User) {
+    return this.gameService.getActiveGame(user.id);
+  }
 
   @Get(':id')
   async getGame(@Param('id') id: string) {
@@ -42,4 +47,3 @@ export class GameController {
     return this.gameService.getMoves(id);
   }
 }
-

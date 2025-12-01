@@ -25,43 +25,94 @@ export default function GamePage() {
     moves,
     playerColor,
     gameStatus,
+    isPlayingBot,
+    botDifficulty,
+    isBotThinking,
     updateGame,
     setPlayerColor,
+    setIsPlayingBot,
+    setBotDifficulty,
+    setBotThinking,
     reset,
   } = useGameStore();
   const [showPromotionModal, setShowPromotionModal] = useState(false);
   const [pendingMove, setPendingMove] = useState<{ from: string; to: string } | null>(null);
 
-  useGameEvents(gameId);
 
   useEffect(() => {
     const loadGame = async () => {
       try {
-        const response = await api.get(`/game/${gameId}`);
-        const game = response.data;
-        updateGame(game);
+        let game;
+        if (gameId) {
+          const response = await api.get(`/game/${gameId}`);
+          game = response.data;
+        } else {
+          const response = await api.get('/game/active');
+          if (response.data) {
+            game = response.data;
+            router.replace(`/game/${game.id}`);
+          } else {
+            router.push('/lobby');
+            return;
+          }
+        }
 
+        updateGame(game);
+        const isBotGame = game.isBotGame || false;
+        setIsPlayingBot(isBotGame);
+        if (isBotGame && game.botDifficulty) {
+          setBotDifficulty(game.botDifficulty);
+        }
         if (game.whitePlayerId === user?.id) {
           setPlayerColor('white');
         } else if (game.blackPlayerId === user?.id) {
           setPlayerColor('black');
         }
-
-        emit('join_game', { gameId });
+        if (!isBotGame) {
+          emit('join_game', { gameId: game.id });
+        }
       } catch (error) {
         console.error('Failed to load game:', error);
         router.push('/lobby');
       }
     };
 
-    if (gameId && user) {
+    if (user) {
       loadGame();
     }
 
     return () => {
       reset();
     };
-  }, [gameId, user, updateGame, setPlayerColor, emit, router, reset]);
+  }, [gameId, user, updateGame, setPlayerColor, setIsPlayingBot, setBotDifficulty, emit, router, reset]);
+
+  useEffect(() => {
+    if (!isPlayingBot || !currentGame || !gameId) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await api.get(`/game/${gameId}`);
+        const game = response.data;
+        
+        const currentTurn = game.currentFen.split(' ')[1];
+        const isBotTurn = (currentTurn === 'w' && game.whitePlayer?.isBot) ||
+                         (currentTurn === 'b' && game.blackPlayer?.isBot);
+        
+        if (isBotTurn && game.status === 'in_progress') {
+          setBotThinking(true);
+        } else {
+          setBotThinking(false);
+        }
+        if (game.currentFen !== fen) {
+          updateGame(game);
+        }
+      } catch (error) {
+        console.error('Failed to poll game state:', error);
+      }
+    }, 1000);
+
+    return () => clearInterval(pollInterval);
+  }, [isPlayingBot, gameId, currentGame, fen, updateGame, setBotThinking]);
 
   const handleMove = (from: string, to: string) => {
     if (gameStatus !== 'in_progress') return;
@@ -74,17 +125,34 @@ export default function GamePage() {
       setPendingMove({ from, to });
       setShowPromotionModal(true);
     } else {
-      emit('make_move', { gameId, move: `${from}${to}` });
+      if (isPlayingBot) {
+        api.post(`/game/${gameId}/move`, {
+          move: `${from}${to}`,
+        }).catch((error) => {
+          console.error('Failed to make move:', error);
+        });
+      } else {
+        emit('make_move', { gameId, move: `${from}${to}` });
+      }
     }
   };
 
   const handlePromotion = (piece: string) => {
     if (pendingMove) {
-      emit('make_move', {
-        gameId,
-        move: `${pendingMove.from}${pendingMove.to}`,
-        promotion: piece,
-      });
+      if (isPlayingBot) {
+        api.post(`/game/${gameId}/move`, {
+          move: `${pendingMove.from}${pendingMove.to}`,
+          promotion: piece,
+        }).catch((error) => {
+          console.error('Failed to make move:', error);
+        });
+      } else {
+        emit('make_move', {
+          gameId,
+          move: `${pendingMove.from}${pendingMove.to}`,
+          promotion: piece,
+        });
+      }
       setPendingMove(null);
       setShowPromotionModal(false);
     }
@@ -145,16 +213,52 @@ export default function GamePage() {
               <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
                 <div className="flex justify-between items-center mb-4">
                   <div>
-                    <div className="text-white font-semibold">White</div>
-                    <div className="text-white/70 text-sm">ELO: {currentGame.whitePlayerId === user?.id ? user.eloRating : '---'}</div>
+                    <div className="text-white font-semibold flex items-center gap-2">
+                      White
+                      {currentGame.whitePlayer?.isBot && (
+                        <span className="text-xs bg-purple-600 px-2 py-1 rounded">
+                          🤖 Bot {botDifficulty ? `- ${botDifficulty.charAt(0).toUpperCase() + botDifficulty.slice(1)}` : ''}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-white/70 text-sm">
+                      {currentGame.whitePlayer?.username || 'ChessBot'}
+                    </div>
+                    {!currentGame.whitePlayer?.isBot && (
+                      <div className="text-white/70 text-sm">
+                        ELO: {currentGame.whitePlayer?.eloRating || '---'}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
                   <div>
-                    <div className="text-white font-semibold">Black</div>
-                    <div className="text-white/70 text-sm">ELO: {currentGame.blackPlayerId === user?.id ? user.eloRating : '---'}</div>
+                    <div className="text-white font-semibold flex items-center gap-2">
+                      Black
+                      {currentGame.blackPlayer?.isBot && (
+                        <span className="text-xs bg-purple-600 px-2 py-1 rounded">
+                          🤖 Bot {botDifficulty ? `- ${botDifficulty.charAt(0).toUpperCase() + botDifficulty.slice(1)}` : ''}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-white/70 text-sm">
+                      {currentGame.blackPlayer?.username || 'ChessBot'}
+                    </div>
+                    {!currentGame.blackPlayer?.isBot && (
+                      <div className="text-white/70 text-sm">
+                        ELO: {currentGame.blackPlayer?.eloRating || '---'}
+                      </div>
+                    )}
                   </div>
                 </div>
+                {isBotThinking && (
+                  <div className="mt-4 p-2 bg-purple-600/20 rounded-lg">
+                    <div className="flex items-center gap-2 text-purple-300 text-sm">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-purple-300 border-t-transparent"></div>
+                      Bot is thinking...
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
@@ -188,9 +292,11 @@ export default function GamePage() {
               </div>
             </div>
 
-            <div className="lg:col-span-1">
-              <ChatPanel gameId={gameId} />
-            </div>
+            {!isPlayingBot && (
+              <div className="lg:col-span-1">
+                <ChatPanel gameId={gameId} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -204,6 +310,7 @@ export default function GamePage() {
             }}
           />
         )}
+
       </div>
     </ProtectedRoute>
   );

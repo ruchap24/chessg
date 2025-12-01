@@ -8,9 +8,10 @@ class WebSocketManager {
   private reconnectDelays = [1000, 2000, 4000, 8000, 16000, 30000];
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private heartbeatInterval: NodeJS.Timeout | null = null;
-  private messageQueue: Array<{ event: string; data: any }> = [];
+  private messageQueue: Array<{ event: string; data: any; moveId?: string }> = [];
   private isConnected = false;
   private listeners: Map<string, Set<Function>> = new Map();
+  private offlineMoves: Array<{ gameId: string; move: string; promotion?: string; moveId: string; timestamp: number }> = [];
 
   connect(): void {
     if (this.socket?.connected) {
@@ -42,7 +43,9 @@ class WebSocketManager {
       this.isConnected = true;
       this.reconnectAttempts = 0;
       this.flushMessageQueue();
+      this.replayOfflineMoves();
       this.startHeartbeat();
+      this.syncGameState();
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -121,11 +124,72 @@ class WebSocketManager {
     }
   }
 
-  emit(event: string, data: any): void {
+  emit(event: string, data: any, moveId?: string): void {
     if (this.isConnected && this.socket) {
-      this.socket.emit(event, data);
+      this.socket.emit(event, { ...data, moveId });
     } else {
-      this.messageQueue.push({ event, data });
+      if (event === 'make_move') {
+        const generatedMoveId = moveId || `${Date.now()}-${Math.random()}`;
+        this.offlineMoves.push({
+          gameId: data.gameId,
+          move: data.move,
+          promotion: data.promotion,
+          moveId: generatedMoveId,
+          timestamp: Date.now(),
+        });
+        this.saveOfflineMoves();
+      }
+      this.messageQueue.push({ event, data, moveId });
+    }
+  }
+
+  private saveOfflineMoves(): void {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('offline_moves', JSON.stringify(this.offlineMoves));
+    }
+  }
+
+  private loadOfflineMoves(): void {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('offline_moves');
+      if (stored) {
+        this.offlineMoves = JSON.parse(stored);
+      }
+    }
+  }
+
+  private async replayOfflineMoves(): Promise<void> {
+    this.loadOfflineMoves();
+    if (this.offlineMoves.length === 0) return;
+
+    for (const move of this.offlineMoves) {
+      if (this.isConnected && this.socket) {
+        this.socket.emit('make_move', {
+          gameId: move.gameId,
+          move: move.move,
+          promotion: move.promotion,
+          moveId: move.moveId,
+        });
+      }
+    }
+
+    this.offlineMoves = [];
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('offline_moves');
+    }
+  }
+
+  private async syncGameState(): Promise<void> {
+    if (typeof window !== 'undefined') {
+      try {
+        const api = (await import('./api')).default;
+        const response = await api.get('/game/active');
+        if (response.data) {
+          this.socket?.emit('join_game', { gameId: response.data.id });
+        }
+      } catch (error) {
+        console.error('Failed to sync game state:', error);
+      }
     }
   }
 

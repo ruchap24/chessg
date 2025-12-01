@@ -78,6 +78,12 @@ export class Game {
   @Column({ type: 'boolean', default: false })
   isPrivate: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  isBotGame: boolean;
+
+  @Column({ nullable: true })
+  botDifficulty?: string | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   lastMoveAt?: Date | null;
 

@@ -65,6 +65,16 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const activeGame = await this.redis.get(`user_game:${user.id}`);
       if (activeGame) {
         await client.join(`game:${activeGame}`);
+        await this.redis.del(`disconnected:${user.id}:${activeGame}`);
+        
+        const game = await this.gameService.getGame(activeGame);
+        if (game) {
+          client.emit('game_state_restored', {
+            gameId: activeGame,
+            game,
+          });
+        }
+
         this.server.to(`game:${activeGame}`).emit('player_reconnected', {
           userId: user.id,
           username: user.username,

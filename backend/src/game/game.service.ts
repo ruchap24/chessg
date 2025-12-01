@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Chess } from 'chess.js';
@@ -7,6 +7,7 @@ import { Move } from './entities/move.entity';
 import { ChatMessage } from '../chat/entities/chat-message.entity';
 import { UserService } from '../user/user.service';
 import { createRedisClient } from '../config/redis.config';
+import { BotService, BotDifficulty } from '../bot/bot.service';
 
 @Injectable()
 export class GameService {
@@ -20,6 +21,8 @@ export class GameService {
     @InjectRepository(ChatMessage)
     private chatMessageRepository: Repository<ChatMessage>,
     private userService: UserService,
+    @Inject(forwardRef(() => BotService))
+    private botService?: BotService,
   ) {}
 
   async createGame(
@@ -49,6 +52,75 @@ export class GameService {
     return savedGame;
   }
 
+  async createBotGame(
+    userId: string,
+    difficulty: BotDifficulty,
+    playerColor: 'white' | 'black' = 'white',
+  ): Promise<Game> {
+    // Create or get bot user
+    let botUser = await this.userService.findByUsername('ChessBot');
+    if (!botUser) {
+      botUser = await this.userService.create({
+        username: 'ChessBot',
+        email: `bot_${Date.now()}@chessgame.com`,
+        isBot: true,
+        isGuest: false,
+        eloRating: 1200,
+      });
+    }
+
+    const whiteId = playerColor === 'white' ? userId : botUser.id;
+    const blackId = playerColor === 'black' ? userId : botUser.id;
+
+    const chess = new Chess();
+    const initialFen = chess.fen();
+
+    const game = this.gameRepository.create({
+      whitePlayerId: whiteId,
+      blackPlayerId: blackId,
+      status: GameStatus.IN_PROGRESS,
+      currentFen: initialFen,
+      isPrivate: true,
+      isBotGame: true,
+      botDifficulty: difficulty,
+      lastMoveAt: new Date(),
+    });
+
+    const savedGame = await this.gameRepository.save(game);
+
+    // Store bot game info in Redis
+    await this.redis.setex(
+      `bot_game:${savedGame.id}`,
+      3600,
+      JSON.stringify({
+        botUserId: botUser.id,
+        difficulty,
+        playerColor,
+      }),
+    );
+
+    await this.cacheGameState(savedGame.id, {
+      fen: initialFen,
+      pgn: '',
+      status: savedGame.status,
+    });
+
+    // If bot plays first (black), make initial move
+    if (playerColor === 'white' && this.botService) {
+      const delay = this.botService.getThinkingDelay(difficulty);
+      setTimeout(async () => {
+        try {
+          const botMove = await this.botService.playMove(initialFen, difficulty);
+          await this.makeMove(savedGame.id, botUser.id, botMove);
+        } catch (error) {
+          console.error('Initial bot move error:', error);
+        }
+      }, delay);
+    }
+
+    return savedGame;
+  }
+
   async getGame(gameId: string): Promise<Game | null> {
     const cached = await this.redis.get(`game:${gameId}`);
     if (cached) {
@@ -71,7 +143,15 @@ export class GameService {
     userId: string,
     moveNotation: string,
     promotion?: string,
+    moveId?: string,
   ): Promise<{ move?: Move; fen?: string; gameStatus?: GameStatus; result?: GameResult | null; error?: string }> {
+    if (moveId) {
+      const processed = await this.redis.sismember(`processed_moves:${gameId}`, moveId);
+      if (processed) {
+        return { error: 'Move already processed' };
+      }
+    }
+
     const game = await this.getGame(gameId);
     if (!game) {
       return { error: 'Game not found' };
@@ -112,6 +192,12 @@ export class GameService {
       moveNumber: chess.history().length,
     });
     const savedMove = await this.moveRepository.save(moveEntity);
+    
+    if (moveId) {
+      await this.redis.sadd(`processed_moves:${gameId}`, moveId);
+      await this.redis.expire(`processed_moves:${gameId}`, 3600);
+    }
+
     game.currentFen = chess.fen();
     game.pgn = chess.pgn();
     game.lastMoveAt = new Date();
@@ -138,6 +224,37 @@ export class GameService {
       pgn: chess.pgn(),
       status: gameStatus,
     });
+
+    // Check if this is a bot game and trigger bot move
+    if (game.isBotGame && gameStatus === GameStatus.IN_PROGRESS && this.botService) {
+      const botGameData = await this.redis.get(`bot_game:${gameId}`);
+      if (botGameData) {
+        const botInfo = JSON.parse(botGameData);
+        const updatedChess = new Chess(chess.fen());
+        const isBotTurn =
+          (updatedChess.turn() === 'w' && game.whitePlayerId === botInfo.botUserId) ||
+          (updatedChess.turn() === 'b' && game.blackPlayerId === botInfo.botUserId);
+
+        if (isBotTurn) {
+          const delay = this.botService.getThinkingDelay(botInfo.difficulty);
+          setTimeout(async () => {
+            try {
+              const botMoveSan = await this.botService.playMove(updatedChess.fen(), botInfo.difficulty);
+              // Bot move is in SAN notation, convert to UCI format for makeMove
+              const tempChess = new Chess(updatedChess.fen());
+              const moveObj = tempChess.move(botMoveSan);
+              if (moveObj) {
+                const uciMove = `${moveObj.from}${moveObj.to}`;
+                await this.makeMove(gameId, botInfo.botUserId, uciMove, moveObj.promotion);
+              }
+            } catch (error) {
+              console.error('Bot move error:', error);
+            }
+          }, delay);
+        }
+      }
+    }
+
     return {
       move: savedMove,
       fen: chess.fen(),

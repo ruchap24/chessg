@@ -39,6 +39,9 @@ export class User {
   @Column({ type: 'boolean', default: false })
   isGuest: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  isBot: boolean;
+
   @OneToMany(() => Game, (game) => game.whitePlayer)
   whiteGames: Game[];
 

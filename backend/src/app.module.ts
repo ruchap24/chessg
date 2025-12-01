@@ -9,6 +9,7 @@ import { UserModule } from './user/user.module';
 import { GameModule } from './game/game.module';
 import { MatchmakingModule } from './matchmaking/matchmaking.module';
 import { ChatModule } from './chat/chat.module';
+import { BotModule } from './bot/bot.module';
 import { buildTypeOrmOptions } from './config/database.config';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 
@@ -26,6 +27,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
     GameModule,
     MatchmakingModule,
     ChatModule,
+    BotModule,
   ],
   controllers: [AppController],
   providers: [

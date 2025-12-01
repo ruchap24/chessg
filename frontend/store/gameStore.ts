@@ -20,6 +20,20 @@ export interface Game {
   currentFen: string;
   roomCode?: string | null;
   isPrivate: boolean;
+  isBotGame?: boolean;
+  botDifficulty?: string | null;
+  whitePlayer?: {
+    id: string;
+    username: string;
+    isBot?: boolean;
+    eloRating?: number;
+  };
+  blackPlayer?: {
+    id: string;
+    username: string;
+    isBot?: boolean;
+    eloRating?: number;
+  };
   lastMoveAt?: string | null;
   createdAt: string;
   completedAt?: string | null;
@@ -32,6 +46,9 @@ interface GameState {
   playerColor: 'white' | 'black' | null;
   gameStatus: string;
   capturedPieces: { white: string[]; black: string[] };
+  isPlayingBot: boolean;
+  botDifficulty: string | null;
+  isBotThinking: boolean;
   updateGame: (game: Game) => void;
   makeMove: (move: Move) => void;
   updateFen: (fen: string) => void;
@@ -39,6 +56,9 @@ interface GameState {
   setPlayerColor: (color: 'white' | 'black') => void;
   setGameStatus: (status: string) => void;
   setResult: (result: string) => void;
+  setIsPlayingBot: (isBot: boolean) => void;
+  setBotDifficulty: (difficulty: string) => void;
+  setBotThinking: (thinking: boolean) => void;
   reset: () => void;
 }
 
@@ -49,6 +69,9 @@ const initialState = {
   playerColor: null,
   gameStatus: 'waiting',
   capturedPieces: { white: [], black: [] },
+  isPlayingBot: false,
+  botDifficulty: null,
+  isBotThinking: false,
 };
 
 export const useGameStore = create<GameState>((set) => ({
@@ -93,6 +116,18 @@ export const useGameStore = create<GameState>((set) => ({
         ? { ...state.currentGame, result }
         : null,
     }));
+  },
+
+  setIsPlayingBot: (isBot: boolean) => {
+    set({ isPlayingBot: isBot });
+  },
+
+  setBotDifficulty: (difficulty: string) => {
+    set({ botDifficulty: difficulty });
+  },
+
+  setBotThinking: (thinking: boolean) => {
+    set({ isBotThinking: thinking });
   },
 
   reset: () => {

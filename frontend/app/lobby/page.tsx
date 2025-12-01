@@ -10,6 +10,8 @@ import { api } from '../../lib/api';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import MatchmakingCard from '../../components/MatchmakingCard';
 import PrivateRoomModal from '../../components/PrivateRoomModal';
+import BotDifficultyModal from '../../components/BotDifficultyModal';
+import BotDifficultyModal from '../../components/BotDifficultyModal';
 
 export default function LobbyPage() {
   const { user } = useAuth();
@@ -26,6 +28,7 @@ export default function LobbyPage() {
     reset,
   } = useMatchmakingStore();
   const [showPrivateModal, setShowPrivateModal] = useState(false);
+  const [showBotModal, setShowBotModal] = useState(false);
   const [isPrivateMode, setIsPrivateMode] = useState<'create' | 'join' | null>(null);
   const [queueStatus, setQueueStatus] = useState<{ queueSize: number; waitTime?: number } | null>(null);
 
@@ -123,6 +126,33 @@ export default function LobbyPage() {
                   Find Match
                 </motion.button>
 
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowBotModal(true)}
+                  className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold py-4 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all"
+                >
+                  Play vs Computer
+                </motion.button>
+
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-white/20"></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-transparent text-white/70">Or</span>
+                  </div>
+                </div>
+
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowBotModal(true)}
+                  className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold py-4 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all mb-4"
+                >
+                  🤖 Play vs Computer
+                </motion.button>
+
                 <div className="relative my-6">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-white/20"></div>
@@ -175,6 +205,10 @@ export default function LobbyPage() {
               }
             }}
           />
+        )}
+
+        {showBotModal && (
+          <BotDifficultyModal onClose={() => setShowBotModal(false)} />
         )}
       </div>
     </ProtectedRoute>
