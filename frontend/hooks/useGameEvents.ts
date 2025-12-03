@@ -24,9 +24,7 @@ export const useGameEvents = (gameId: string) => {
       }
     };
 
-    const handleBotThinking = () => {
-      // Bot thinking indicator would be set here if needed
-    };
+ 
 
     const handleGameOver = (data: { gameId: string; result: string; reason: string; eloChange?: number }) => {
       if (data.gameId === gameId) {

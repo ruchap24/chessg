@@ -25,7 +25,6 @@ export const useMatchmakingStore = create<MatchmakingState>((set) => ({
       searchingFor: 'public',
     });
   },
-
   leaveQueue: () => {
     set({
       inQueue: false,
@@ -40,14 +39,12 @@ export const useMatchmakingStore = create<MatchmakingState>((set) => ({
       searchingFor: 'private',
     });
   },
-
   joinRoom: (roomCode: string) => {
     set({
       roomCode,
       searchingFor: 'private',
     });
   },
-
   reset: () => {
     set({
       inQueue: false,
