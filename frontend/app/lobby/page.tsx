@@ -37,7 +37,6 @@ export default function LobbyPage() {
       reset();
       router.push(`/game/${data.gameId}`);
     };
-
     on('match_found', handleMatchFound);
     const statusInterval = setInterval(async () => {
       if (inQueue) {
@@ -125,7 +124,6 @@ export default function LobbyPage() {
                 >
                   Find Match
                 </motion.button>
-
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -134,7 +132,6 @@ export default function LobbyPage() {
                 >
                   Play vs Computer
                 </motion.button>
-
                 <div className="relative my-6">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-white/20"></div>
@@ -143,7 +140,6 @@ export default function LobbyPage() {
                     <span className="px-2 bg-transparent text-white/70">Or</span>
                   </div>
                 </div>
-
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -152,7 +148,6 @@ export default function LobbyPage() {
                 >
                   🤖 Play vs Computer
                 </motion.button>
-
                 <div className="relative my-6">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-white/20"></div>
@@ -161,7 +156,6 @@ export default function LobbyPage() {
                     <span className="px-2 bg-transparent text-white/70">Or</span>
                   </div>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
@@ -171,7 +165,6 @@ export default function LobbyPage() {
                   >
                     Create Private Room
                   </motion.button>
-
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -185,7 +178,6 @@ export default function LobbyPage() {
             )}
           </motion.div>
         </div>
-
         {showPrivateModal && (
           <PrivateRoomModal
             mode={isPrivateMode || 'create'}
@@ -206,7 +198,6 @@ export default function LobbyPage() {
             }}
           />
         )}
-
         {showBotModal && (
           <BotDifficultyModal onClose={() => setShowBotModal(false)} />
         )}
